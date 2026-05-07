@@ -8,7 +8,7 @@
 
 This PR replaces the seeding strategy used by `RandomPCG::randomize()` with one that draws from the operating system's cryptographic randomness source. The current implementation relies entirely on coarse-grained timing inputs that produce identical seeds for back-to-back calls, leading to correlated output streams across `RandomNumberGenerator` instances created in close succession.
 
-Closes [godotengine/godot#XXXXX](https://github.com/godotengine/godot/issues/XXXXX) (this PR's accompanying issue, replace with the actual number once filed).
+Closes [godotengine/godot#119322](https://github.com/godotengine/godot/issues/119322).
 
 Re-addresses [#48087](https://github.com/godotengine/godot/issues/48087), which was closed as completed in 2021 with a partial mitigation that did not resolve the dominant failure mode (calls within the same wall-clock second).
 
@@ -32,7 +32,7 @@ The fallback path retained for unknown or constrained platforms uses a process-w
 
 | Platform              | API used                                                        | Header                | Link flag             |
 | --------------------- | --------------------------------------------------------------- | --------------------- | --------------------- |
-| Windows               | `BCryptGenRandom` with `BCRYPT_USE_SYSTEM_PREFERRED_RNG`        | `<bcrypt.h>`          | `bcrypt.lib` (added)  |
+| Windows               | `BCryptGenRandom` with `BCRYPT_USE_SYSTEM_PREFERRED_RNG`        | `<bcrypt.h>`          | `bcrypt.lib` (already linked in `platform/windows/detect.py`) |
 | Linux                 | `getentropy(3)`                                                 | `<unistd.h>`          | (none)                |
 | macOS                 | `getentropy(3)`                                                 | `<unistd.h>`          | (none)                |
 | iOS                   | `getentropy(3)`                                                 | `<unistd.h>`          | (none)                |
@@ -204,9 +204,9 @@ void RandomPCG::randomize() {
 // (rest of file unchanged: rand_weighted, random(double,double), etc.)
 ```
 
-#### `platform/windows/SCsub`
+#### Windows linker
 
-Add `bcrypt` to the Windows link libraries. The library is part of the Windows SDK, ships with every supported version of Windows, and adds no external dependency. Other parts of Godot already link it indirectly through certain network code, so this is at most a redundant declaration in those configurations and a one-line addition in the rest.
+`bcrypt` is already in the Windows LIBS list at `platform/windows/detect.py:452`, so no build-system change is required.
 
 #### Test additions
 
