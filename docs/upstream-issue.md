@@ -104,7 +104,7 @@ Two `RandomNumberGenerator` instances created in succession, with no explicit se
 
 ### Reproduction project
 
-A self-contained reproduction is available at [https://github.com/atelico/better_rng/tree/main/tests/rng_experiment](https://github.com/atelico/better_rng/tree/main/tests/rng_experiment). It also includes a comparison against an alternative implementation that does not exhibit the bug, for sanity-checking the experimental setup.
+A self-contained reproduction is available at [https://github.com/atelico/better-godot-rng/tree/main/tests/rng_experiment](https://github.com/atelico/better-godot-rng/tree/main/tests/rng_experiment). It also includes a comparison against an alternative implementation that does not exhibit the bug, for sanity-checking the experimental setup.
 
 ### Related history
 
