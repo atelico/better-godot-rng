@@ -1,0 +1,140 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-linux:
+    name: Build (Linux ${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Install cross linker
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+      - name: Configure cross linker
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          mkdir -p .cargo
+          echo '[target.aarch64-unknown-linux-gnu]' >> .cargo/config.toml
+          echo 'linker = "aarch64-linux-gnu-gcc"' >> .cargo/config.toml
+      - run: cargo build --release --target ${{ matrix.target }}
+      - name: Stage artifacts
+        run: |
+          mkdir -p staging/addons/better_rng
+          cp better_rng.gdextension staging/addons/better_rng/
+          cp target/${{ matrix.target }}/release/libgodot_better_rng.so staging/addons/better_rng/libgodot_better_rng.${{ matrix.target == 'x86_64-unknown-linux-gnu' && 'linux-x86_64.so' || 'linux-arm64.so' }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.target }}
+          path: staging
+
+  build-macos:
+    name: Build (macOS universal)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - run: cargo build --release --target aarch64-apple-darwin
+      - run: cargo build --release --target x86_64-apple-darwin
+      - name: lipo into universal binary
+        run: |
+          mkdir -p staging/addons/better_rng
+          lipo -create -output staging/addons/better_rng/libgodot_better_rng.dylib \
+            target/aarch64-apple-darwin/release/libgodot_better_rng.dylib \
+            target/x86_64-apple-darwin/release/libgodot_better_rng.dylib
+          cp better_rng.gdextension staging/addons/better_rng/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-universal
+          path: staging
+
+  build-windows:
+    name: Build (Windows x86_64)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - run: cargo build --release --target x86_64-pc-windows-msvc
+      - name: Stage artifacts
+        shell: bash
+        run: |
+          mkdir -p staging/addons/better_rng
+          cp better_rng.gdextension staging/addons/better_rng/
+          cp target/x86_64-pc-windows-msvc/release/godot_better_rng.dll staging/addons/better_rng/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x86_64
+          path: staging
+
+  release:
+    name: Publish release
+    needs: [build-linux, build-macos, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Bundle all platforms
+        run: |
+          set -eux
+          mkdir -p bundle/addons/better_rng
+          cp better_rng.gdextension bundle/addons/better_rng/
+          # Linux
+          cp artifacts/linux-x86_64-unknown-linux-gnu/addons/better_rng/*.so bundle/addons/better_rng/ 2>/dev/null || true
+          cp artifacts/linux-aarch64-unknown-linux-gnu/addons/better_rng/*.so bundle/addons/better_rng/ 2>/dev/null || true
+          # We need the .gdextension to actually point at distinct filenames per platform.
+          # Use a release-specific .gdextension that references the per-arch sonames.
+          cat > bundle/addons/better_rng/better_rng.gdextension <<'EOF'
+          [configuration]
+          entry_symbol = "gdext_rust_init"
+          compatibility_minimum = 4.2
+          reloadable = true
+
+          [libraries]
+          linux.debug.x86_64   = "res://addons/better_rng/libgodot_better_rng.linux-x86_64.so"
+          linux.release.x86_64 = "res://addons/better_rng/libgodot_better_rng.linux-x86_64.so"
+          linux.debug.arm64    = "res://addons/better_rng/libgodot_better_rng.linux-arm64.so"
+          linux.release.arm64  = "res://addons/better_rng/libgodot_better_rng.linux-arm64.so"
+          macos.debug          = "res://addons/better_rng/libgodot_better_rng.dylib"
+          macos.release        = "res://addons/better_rng/libgodot_better_rng.dylib"
+          windows.debug.x86_64   = "res://addons/better_rng/godot_better_rng.dll"
+          windows.release.x86_64 = "res://addons/better_rng/godot_better_rng.dll"
+          EOF
+          # macOS
+          cp artifacts/macos-universal/addons/better_rng/libgodot_better_rng.dylib bundle/addons/better_rng/
+          # Windows
+          cp artifacts/windows-x86_64/addons/better_rng/godot_better_rng.dll bundle/addons/better_rng/
+          (cd bundle && zip -r ../all-platforms.zip addons)
+      - name: Per-platform zips
+        run: |
+          set -eux
+          for d in artifacts/*/; do
+            name=$(basename "$d")
+            (cd "$d" && zip -r "../../${name}.zip" addons)
+          done
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            all-platforms.zip
+            *.zip
+          generate_release_notes: true

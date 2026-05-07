@@ -1,0 +1,10 @@
+/target
+**/*.rs.bk
+*.pdb
+.DS_Store
+/.godot/
+*.import
+tests/rng_experiment/.godot/
+tests/rng_experiment/addons/better_rng/lib*.dylib
+tests/rng_experiment/addons/better_rng/lib*.so
+tests/rng_experiment/addons/better_rng/*.dll

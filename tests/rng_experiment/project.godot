@@ -1,0 +1,6 @@
+config_version=5
+
+[application]
+config/name="rng_experiment"
+config/features=PackedStringArray("4.2")
+run/main_scene="res://main.tscn"

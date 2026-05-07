@@ -1,0 +1,15 @@
+[package]
+name = "godot_better_rng"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+godot = "0.2"
+# OS entropy, cross-platform: Linux, macOS, Windows, Android, iOS, FreeBSD, WASM, ...
+getrandom = "0.2"
+# PCG family of generators — same family Godot uses, with correct seeding via SeedableRng
+rand_pcg = "0.3"
+rand_core = "0.6"
